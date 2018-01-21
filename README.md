@@ -28,4 +28,4 @@ Use Visual Studio 2012 or higher.
 
 Copyright (c) 2018 cyfrost.
 
-Licensed under the [MIT License](https://github.com/cyfrost/EasyRun/blob/master/LICENSE).
+Licensed under the [MIT License](https://github.com/cyfrost/PathPlusPlus/blob/master/LICENSE).
