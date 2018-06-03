@@ -5,7 +5,7 @@
 [![license](https://img.shields.io/badge/license-MIT-orange.svg)](https://github.com/cyfrost/PathPlusPlus/blob/master/LICENSE)
 [![HitCount](http://hits.dwyl.com/cyfrost/PathPlusPlus.svg)](http://hits.dwyl.com/cyfrost/PathPlusPlus)
 
-View and manage Environment Variables from the comfort of Context Menu!
+A utility for Windows to view and manage Environment Variables from the comfort of the Context Menu in Windows Explorer.
 
 ## Download
 
