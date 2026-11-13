@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <RootNamespace>PathPlusPlus.Cli</RootNamespace>
+    <AssemblyName>pathpp</AssemblyName>
+    <AssemblyTitle>Path++ command-line tool</AssemblyTitle>
+    <Description>Add, remove and inspect PATH and environment variables from the command line.</Description>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <ApplicationIcon>..\PathPlusPlus.App\app.ico</ApplicationIcon>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\PathPlusPlus.Core\PathPlusPlus.Core.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <InternalsVisibleTo Include="PathPlusPlus.Tests" />
+  </ItemGroup>
+</Project>

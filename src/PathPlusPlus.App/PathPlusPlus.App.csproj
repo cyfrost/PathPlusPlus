@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <RootNamespace>PathPlusPlus.App</RootNamespace>
+    <AssemblyName>PathPlusPlus</AssemblyName>
+    <AssemblyTitle>Path++</AssemblyTitle>
+    <Description>View and manage PATH and environment variables from Explorer.</Description>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <ApplicationIcon>app.ico</ApplicationIcon>
+  </PropertyGroup>
+  <ItemGroup>
+    <Reference Include="System.Windows.Forms" />
+    <Reference Include="System.Drawing" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\PathPlusPlus.Core\PathPlusPlus.Core.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <InternalsVisibleTo Include="PathPlusPlus.Tests" />
+  </ItemGroup>
+</Project>
