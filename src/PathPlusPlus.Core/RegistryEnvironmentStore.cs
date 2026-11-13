@@ -1,38 +1,11 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Security;
 using Microsoft.Win32;
 
 namespace PathPlusPlus.Core
 {
-    /// <summary>A raw registry value: the unexpanded text plus its registry type.</summary>
-    public sealed class RawValue
-    {
-        public RawValue(string value, RegistryValueKind kind)
-        {
-            Value = value ?? string.Empty;
-            Kind = kind;
-        }
-
-        public string Value { get; }
-
-        /// <summary>REG_SZ (String) or REG_EXPAND_SZ (ExpandString).</summary>
-        public RegistryValueKind Kind { get; }
-    }
-
-    /// <summary>Persistent storage for environment variables (the registry, or a fake in tests).</summary>
-    public interface IEnvironmentStore
-    {
-        /// <summary>Returns the raw, unexpanded value, or null when the variable does not exist.</summary>
-        RawValue Read(EnvScope scope, string name);
-
-        void Write(EnvScope scope, string name, string value, RegistryValueKind kind);
-
-        void Delete(EnvScope scope, string name);
-
-        IList<string> GetNames(EnvScope scope);
-    }
-
     /// <summary>
     /// Reads and writes the real environment registry keys.
     /// Values are always read with <see cref="RegistryValueOptions.DoNotExpandEnvironmentNames"/> and
@@ -56,7 +29,7 @@ namespace PathPlusPlus.Core
                     string text = value as string;
                     if (text == null)
                     {
-                        text = value is string[] multi ? string.Join(";", multi) : Convert.ToString(value);
+                        text = value is string[] multi ? string.Join(";", multi) : Convert.ToString(value, CultureInfo.InvariantCulture);
                     }
                     return new RawValue(text, kind);
                 }
@@ -98,7 +71,7 @@ namespace PathPlusPlus.Core
             {
                 using (var key = Open(scope, writable: false))
                 {
-                    return key == null ? (IList<string>)new string[0] : key.GetValueNames();
+                    return key == null ? (IList<string>)Array.Empty<string>() : key.GetValueNames();
                 }
             });
         }

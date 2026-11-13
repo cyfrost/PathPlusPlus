@@ -6,7 +6,7 @@
     <AssemblyTitle>Path++ command-line tool</AssemblyTitle>
     <Description>Add, remove and inspect PATH and environment variables from the command line.</Description>
     <ApplicationManifest>app.manifest</ApplicationManifest>
-    <ApplicationIcon>..\PathPlusPlus.App\app.ico</ApplicationIcon>
+    <ApplicationIcon>$(AppIcon)</ApplicationIcon>
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="..\PathPlusPlus.Core\PathPlusPlus.Core.csproj" />

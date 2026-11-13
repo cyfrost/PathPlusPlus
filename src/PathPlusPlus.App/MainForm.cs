@@ -1,7 +1,7 @@
 using System;
 using System.Collections.Generic;
-using System.ComponentModel;
 using System.Drawing;
+using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Windows.Forms;
@@ -12,18 +12,7 @@ namespace PathPlusPlus.App
     /// <summary>The PATH editor: user and system PATH side by side, edited in memory and saved together.</summary>
     internal sealed class MainForm : Form
     {
-        private sealed class ScopeTab
-        {
-            public EnvScope Scope;
-            public TabPage Page;
-            public ListView List;
-            public string Original = string.Empty;
-            public List<string> Segments = new List<string>();
-            public bool ReadOnly;
-
-            public string Current => string.Join(";", Segments);
-            public bool Dirty => !string.Equals(Current, Original, StringComparison.Ordinal);
-        }
+        private const int SideButtonWidth = 130;
 
         private readonly OperationRunner _runner;
         private readonly ScopeTab _user;
@@ -31,7 +20,16 @@ namespace PathPlusPlus.App
         private readonly TabControl _tabs;
         private readonly Label _banner;
         private readonly Label _status;
-        private readonly Button _add, _edit, _remove, _up, _down, _cleanup, _open, _save, _revert;
+        private readonly ToolTip _tips = new ToolTip();
+        private readonly Button _add;
+        private readonly Button _edit;
+        private readonly Button _remove;
+        private readonly Button _up;
+        private readonly Button _down;
+        private readonly Button _cleanup;
+        private readonly Button _open;
+        private readonly Button _save;
+        private string _notice;
 
         public MainForm(OperationRunner runner)
         {
@@ -39,60 +37,62 @@ namespace PathPlusPlus.App
             ISessionInfo session = runner.Session;
 
             SuspendLayout();
-            Ui.InitForm(this, "Path++ - PATH editor" + (session.IsElevated ? " (Administrator)" : string.Empty));
+            Ui.InitForm(this, Ui.EditorTitle);
+            if (session.IsElevated) Text += " (Administrator)";
             ClientSize = new Size(940, 560);
-            MinimumSize = new Size(700, 420);
-            Padding = new Padding(10);
+            MinimumSize = new Size(720, 420);
             KeyPreview = true;
 
-            _user = new ScopeTab { Scope = EnvScope.User, ReadOnly = session.IsDifferentUserThanDesktop };
-            _machine = new ScopeTab { Scope = EnvScope.Machine };
+            _user = new ScopeTab(EnvScope.User, "Your PATH", readOnly: session.IsDifferentUserThanDesktop);
+            _machine = new ScopeTab(EnvScope.Machine, "System PATH", readOnly: false);
 
             _banner = Ui.Label(string.Empty, wrapWidth: 900);
-            _banner.ForeColor = Ui.WarningColor;
+            _banner.Margin = new Padding(3, 0, 3, 8);
 
             _tabs = new TabControl { Dock = DockStyle.Fill };
-            _tabs.TabPages.Add(CreatePage(_user, "Your PATH (" + session.UserName + ")"));
-            _tabs.TabPages.Add(CreatePage(_machine, "System PATH (all users)"));
+            _tabs.TabPages.Add(CreatePage(_user));
+            _tabs.TabPages.Add(CreatePage(_machine));
             _tabs.SelectedIndexChanged += (s, e) => UpdateButtons();
 
-            _add = SideButton("&Add…", OnAdd);
-            _edit = SideButton("&Edit…", OnEdit);
-            _remove = SideButton("&Remove", OnRemove);
-            _up = SideButton("Move &up", (s, e) => MoveSelection(-1));
-            _down = SideButton("Move &down", (s, e) => MoveSelection(+1));
-            _cleanup = SideButton("&Clean up", OnCleanup);
-            _open = SideButton("&Open folder", OnOpenFolder);
+            _add = SideButton("&Add…", OnAdd, "Add a folder at the end (Insert)");
+            _edit = SideButton("&Edit…", OnEdit, "Edit the selected entry (Enter or double-click)");
+            _remove = SideButton("&Remove", OnRemove, "Remove the selected entries (Delete)");
+            _up = SideButton("Move &up", (s, e) => MoveSelection(-1), "Move up: earlier entries win (Alt+Up)");
+            _down = SideButton("Move &down", (s, e) => MoveSelection(+1), "Move down (Alt+Down)");
+            _cleanup = SideButton("&Clean up", OnCleanup, "Remove duplicate and empty entries");
+            _open = SideButton("&Open folder", OnOpenFolder, "Open the selected folder in Explorer");
             var side = new FlowLayoutPanel
             {
                 FlowDirection = FlowDirection.TopDown,
                 AutoSize = true,
                 AutoSizeMode = AutoSizeMode.GrowAndShrink,
                 WrapContents = false,
-                Margin = new Padding(8, 22, 0, 0),
+                Margin = new Padding(8, 24, 0, 0),
             };
             side.Controls.AddRange(new Control[] { _add, _edit, _remove, Spacer(), _up, _down, Spacer(), _cleanup, _open });
 
-            var backups = Ui.Button("&Backups…", OnBackups);
-            var windows = Ui.Button("&Windows editor…", (s, e) => Ui.OpenWindowsEnvironmentDialog());
-            var refresh = Ui.Button("Re&load", (s, e) => ReloadAll(askIfDirty: true));
-            _revert = Ui.Button("Re&vert", (s, e) => ReloadAll(askIfDirty: true));
+            Button backups = Ui.Button("&Backups…", OnBackups);
+            backups.Margin = new Padding(0);
+            Button windows = Ui.Button("&Windows editor…", (s, e) => Ui.OpenWindowsEnvironmentDialog());
+            _tips.SetToolTip(windows, "Open the built-in Windows Environment Variables dialog");
+            Button reload = Ui.Button("Re&load", (s, e) => ReloadAll(askIfDirty: true));
+            _tips.SetToolTip(reload, "Reload PATH from Windows, discarding unsaved edits (F5)");
             _save = Ui.Button("&Save", OnSave);
-            _status = new Label { AutoSize = true, Anchor = AnchorStyles.Left, Margin = new Padding(8, 3, 3, 3) };
+            _tips.SetToolTip(_save, "Save your changes (Ctrl+S)");
+            _status = new Label { AutoSize = true, Anchor = AnchorStyles.Left, Margin = new Padding(12, 6, 3, 0) };
 
             var left = new FlowLayoutPanel { AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink, WrapContents = false, Margin = new Padding(0) };
-            backups.Margin = new Padding(0, 3, 0, 3);
-            left.Controls.AddRange(new Control[] { backups, windows, refresh, _status });
-            var right = Ui.ButtonRow(_save, _revert);
+            left.Controls.AddRange(new Control[] { backups, windows, _status });
+            FlowLayoutPanel right = Ui.ButtonRow(_save, reload);
             right.Margin = new Padding(0);
 
-            var bottom = new TableLayoutPanel { ColumnCount = 2, RowCount = 1, AutoSize = true, Dock = DockStyle.Fill, Margin = new Padding(0, 8, 0, 0) };
+            var bottom = new TableLayoutPanel { ColumnCount = 2, RowCount = 1, AutoSize = true, Dock = DockStyle.Fill, Margin = new Padding(0, 12, 0, 0) };
             bottom.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
             bottom.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
             bottom.Controls.Add(left, 0, 0);
             bottom.Controls.Add(right, 1, 0);
 
-            var root = new TableLayoutPanel { ColumnCount = 2, RowCount = 3, Dock = DockStyle.Fill };
+            var root = new TableLayoutPanel { ColumnCount = 2, RowCount = 3, Dock = DockStyle.Fill, Margin = new Padding(0) };
             root.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
             root.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
             root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
@@ -117,9 +117,15 @@ namespace PathPlusPlus.App
 
         private ScopeTab Active => _tabs.SelectedIndex == 1 ? _machine : _user;
 
+        protected override void Dispose(bool disposing)
+        {
+            if (disposing) _tips.Dispose();
+            base.Dispose(disposing);
+        }
+
         // ------------------------------------------------------------------ layout helpers
 
-        private TabPage CreatePage(ScopeTab tab, string title)
+        private TabPage CreatePage(ScopeTab tab)
         {
             var list = new ListView
             {
@@ -132,33 +138,34 @@ namespace PathPlusPlus.App
                 BorderStyle = BorderStyle.None,
             };
             list.Columns.Add("#", 40, HorizontalAlignment.Right);
-            list.Columns.Add("Folder", 520);
-            list.Columns.Add("Status", 220);
+            list.Columns.Add("Folder", 560);
+            list.Columns.Add("Notes", 200);
             list.SelectedIndexChanged += (s, e) => UpdateButtons();
-            list.DoubleClick += (s, e) => OnEdit(s, e);
+            list.DoubleClick += OnEdit;
 
             tab.List = list;
-            tab.Page = new TabPage(title) { Padding = new Padding(2), UseVisualStyleBackColor = true };
+            tab.Page = new TabPage(tab.Title) { Padding = new Padding(2), UseVisualStyleBackColor = true };
             tab.Page.Controls.Add(list);
             return tab.Page;
         }
 
-        private static Button SideButton(string text, EventHandler onClick)
+        private Button SideButton(string text, EventHandler onClick, string tip)
         {
-            var b = Ui.Button(text, onClick, 130);
+            Button b = Ui.Button(text, onClick, SideButtonWidth);
             b.AutoSize = false;
-            b.Size = new Size(130, 28);
+            b.Size = new Size(SideButtonWidth, Ui.ButtonHeight);
             b.Margin = new Padding(0, 0, 0, 6);
+            _tips.SetToolTip(b, tip);
             return b;
         }
 
-        private static Control Spacer() => new Panel { Size = new Size(1, 8), Margin = new Padding(0) };
+        private static Panel Spacer() => new Panel { Size = new Size(1, 8), Margin = new Padding(0) };
 
         private void FitColumns()
         {
             foreach (ScopeTab tab in new[] { _user, _machine })
             {
-                if (tab.List == null || tab.List.Columns.Count < 3) continue;
+                if (tab.List == null) continue;
                 int width = tab.List.ClientSize.Width - tab.List.Columns[0].Width - tab.List.Columns[2].Width - 4;
                 if (width > 100) tab.List.Columns[1].Width = width;
             }
@@ -175,6 +182,7 @@ namespace PathPlusPlus.App
             }
             Reload(_user);
             Reload(_machine);
+            _notice = null;
             Render();
         }
 
@@ -184,28 +192,36 @@ namespace PathPlusPlus.App
             tab.Segments = new PathList(tab.Original).Segments.ToList();
         }
 
+        /// <summary>Call after any in-memory edit.</summary>
+        private void Edited()
+        {
+            _notice = null;
+            Render();
+        }
+
         private void Render()
         {
             RenderTab(_user, _machine);
             RenderTab(_machine, _user);
             FitColumns();
 
-            var notes = new List<string>();
             if (_user.ReadOnly)
             {
-                notes.Add("Path++ is running as '" + _runner.Session.UserName + "', not as the person signed in to this desktop, " +
-                          "so your user PATH is shown read-only. Start Path++ normally (not 'Run as administrator') to edit it.");
+                _banner.Text = "Path++ is running as '" + _runner.Session.UserName + "', not as the person signed in to this desktop, " +
+                               "so your user PATH is read-only here. Start Path++ normally (not 'Run as administrator') to edit it.";
+                _banner.ForeColor = Ui.ToneColor(Ui.Tone.Error);
             }
-            if (!_runner.Session.IsElevated)
+            else
             {
-                notes.Add("Saving changes to the system PATH asks for administrator approval.");
+                _banner.Text = _runner.Session.IsElevated
+                    ? "Earlier entries win when two folders contain a program with the same name."
+                    : "Earlier entries win when two folders contain a program with the same name. Saving the system PATH asks for administrator approval.";
+                _banner.ForeColor = Ui.ToneColor(Ui.Tone.Info);
             }
-            _banner.Text = string.Join(" ", notes);
-            _banner.ForeColor = _user.ReadOnly ? Ui.ProblemColor : SystemColors.GrayText;
             UpdateButtons();
         }
 
-        private void RenderTab(ScopeTab tab, ScopeTab other)
+        private static void RenderTab(ScopeTab tab, ScopeTab other)
         {
             var selected = new HashSet<int>(tab.List.SelectedIndices.Cast<int>());
             IList<EntryInfo> infos = PathAnalyzer.Analyze(tab.Segments, other.Segments);
@@ -215,27 +231,11 @@ namespace PathPlusPlus.App
             foreach (EntryInfo info in infos)
             {
                 bool empty = info.Status == EntryStatus.Empty;
-                var item = new ListViewItem((info.Index + 1).ToString()) { UseItemStyleForSubItems = false, Tag = info.Index };
+                var item = new ListViewItem((info.Index + 1).ToString(CultureInfo.CurrentCulture)) { UseItemStyleForSubItems = false, Tag = info.Index };
                 item.SubItems.Add(empty ? "(empty entry)" : info.Text);
-                var status = item.SubItems.Add(info.Describe(tab.Scope));
-
-                if (empty)
-                {
-                    item.SubItems[1].ForeColor = SystemColors.GrayText;
-                    status.ForeColor = SystemColors.GrayText;
-                }
-                else if ((info.Status & (EntryStatus.Missing | EntryStatus.NotAbsolute | EntryStatus.UnresolvedVariable)) != 0)
-                {
-                    status.ForeColor = Ui.ProblemColor;
-                }
-                else if ((info.Status & EntryStatus.Duplicate) != 0)
-                {
-                    status.ForeColor = Ui.WarningColor;
-                }
-                else
-                {
-                    status.ForeColor = SystemColors.GrayText;
-                }
+                ListViewItem.ListViewSubItem notes = item.SubItems.Add(info.Describe(tab.Scope));
+                notes.ForeColor = Ui.ToneColor(ToneOf(info.Status));
+                if (empty) item.SubItems[1].ForeColor = Ui.ToneColor(Ui.Tone.Info);
 
                 if (!empty && info.Expanded != null && !string.Equals(info.Expanded, PathNormalizer.Clean(info.Text), StringComparison.Ordinal))
                 {
@@ -247,8 +247,14 @@ namespace PathPlusPlus.App
             tab.List.EndUpdate();
 
             int count = tab.Segments.Count(s => PathNormalizer.Clean(s).Length > 0);
-            string baseTitle = tab.Scope == EnvScope.User ? "Your PATH (" + _runner.Session.UserName + ")" : "System PATH (all users)";
-            tab.Page.Text = baseTitle + " - " + count + (tab.Dirty ? " *" : string.Empty);
+            tab.Page.Text = tab.Title + " (" + count + ")" + (tab.Dirty ? " *" : string.Empty);
+        }
+
+        private static Ui.Tone ToneOf(EntryStatus status)
+        {
+            if ((status & (EntryStatus.Missing | EntryStatus.NotAbsolute | EntryStatus.UnresolvedVariable)) != 0) return Ui.Tone.Error;
+            if ((status & EntryStatus.Duplicate) != 0) return Ui.Tone.Warning;
+            return Ui.Tone.Info;
         }
 
         private void UpdateButtons()
@@ -267,16 +273,24 @@ namespace PathPlusPlus.App
 
             bool dirty = _user.Dirty || _machine.Dirty;
             _save.Enabled = dirty;
-            _revert.Enabled = dirty;
             Ui.SetShield(_save, _machine.Dirty && _runner.NeedsElevation(EnvScope.Machine));
 
             var pending = new List<string>();
             if (_user.Dirty) pending.Add("your PATH");
             if (_machine.Dirty) pending.Add("system PATH");
-            _status.Text = pending.Count == 0 ? string.Empty : "Unsaved changes: " + string.Join(", ", pending);
+            if (pending.Count > 0)
+            {
+                _status.Text = "Unsaved changes: " + string.Join(", ", pending);
+                _status.ForeColor = Ui.ToneColor(Ui.Tone.Warning);
+            }
+            else
+            {
+                _status.Text = _notice ?? string.Empty;
+                _status.ForeColor = Ui.ToneColor(Ui.Tone.Info);
+            }
         }
 
-        private void SelectEntry(ScopeTab tab, int index)
+        private static void SelectEntry(ScopeTab tab, int index)
         {
             tab.List.SelectedIndices.Clear();
             if (index >= 0 && index < tab.List.Items.Count)
@@ -294,24 +308,24 @@ namespace PathPlusPlus.App
         {
             ScopeTab tab = Active;
             if (tab.ReadOnly) return;
-            using (var dialog = new EntryDialog("Add folder to " + (tab.Scope == EnvScope.User ? "your" : "the system") + " PATH", string.Empty))
+            string target = tab.Scope == EnvScope.User ? "your user PATH" : "the system PATH";
+            using (var dialog = new EntryDialog("Add folder", "Add a folder to the end of " + target + ":", string.Empty))
             {
                 if (dialog.ShowDialog(this) != DialogResult.OK) return;
                 var list = new PathList(tab.Segments);
                 int existing = list.IndexOf(dialog.Value);
                 if (existing >= 0)
                 {
-                    Ui.Info(this, "That folder is already in this PATH (entry " + (existing + 1) + ").");
+                    Ui.Info(this, "That folder is already in " + target + " (entry " + (existing + 1) + ").");
                     SelectEntry(tab, existing);
                     return;
                 }
 
-                // Insert after the selection, or at the end.
-                int at = tab.List.SelectedIndices.Count > 0 ? tab.List.SelectedIndices.Cast<int>().Max() + 1 : tab.Segments.Count;
-                while (at == tab.Segments.Count && at > 0 && PathNormalizer.Clean(tab.Segments[at - 1]).Length == 0) at--;
-                tab.Segments.Insert(at, dialog.Value);
-                Render();
-                SelectEntry(tab, at);
+                // Same behaviour as the Explorer menu and 'pathpp add': append, without leaving empty entries behind.
+                list.Add(dialog.Value, prepend: false);
+                tab.Segments = list.Segments.ToList();
+                Edited();
+                SelectEntry(tab, tab.Segments.Count - 1);
             }
         }
 
@@ -320,11 +334,11 @@ namespace PathPlusPlus.App
             ScopeTab tab = Active;
             if (tab.ReadOnly || tab.List.SelectedIndices.Count != 1) return;
             int index = tab.List.SelectedIndices[0];
-            using (var dialog = new EntryDialog("Edit PATH entry", PathNormalizer.Clean(tab.Segments[index])))
+            using (var dialog = new EntryDialog("Edit entry", "Edit this PATH entry:", PathNormalizer.Clean(tab.Segments[index])))
             {
                 if (dialog.ShowDialog(this) != DialogResult.OK) return;
                 tab.Segments[index] = dialog.Value;
-                Render();
+                Edited();
                 SelectEntry(tab, index);
             }
         }
@@ -335,7 +349,8 @@ namespace PathPlusPlus.App
             if (tab.ReadOnly || tab.List.SelectedIndices.Count == 0) return;
             List<int> indices = tab.List.SelectedIndices.Cast<int>().OrderByDescending(i => i).ToList();
             foreach (int i in indices) tab.Segments.RemoveAt(i);
-            Render();
+            tab.List.SelectedIndices.Clear();
+            Edited();
             SelectEntry(tab, Math.Min(indices.Last(), tab.Segments.Count - 1));
         }
 
@@ -355,7 +370,7 @@ namespace PathPlusPlus.App
                 tab.Segments[i] = tmp;
             }
             tab.List.SelectedIndices.Clear();
-            Render();
+            Edited();
             foreach (int i in indices) tab.List.Items[i + direction].Selected = true;
             tab.List.EnsureVisible(indices[0] + direction);
             tab.List.Focus();
@@ -373,7 +388,8 @@ namespace PathPlusPlus.App
                 return;
             }
             tab.Segments = list.Segments.ToList();
-            Render();
+            tab.List.SelectedIndices.Clear();
+            Edited();
             Ui.Info(this, "Removed " + removed + " duplicate or empty entr" + (removed == 1 ? "y" : "ies") + ". Click Save to keep the change.");
         }
 
@@ -382,7 +398,7 @@ namespace PathPlusPlus.App
             ScopeTab tab = Active;
             if (tab.List.SelectedIndices.Count != 1) return;
             string folder = PathNormalizer.Expand(tab.Segments[tab.List.SelectedIndices[0]]);
-            if (!Directory.Exists(folder))
+            if (folder.Length == 0 || !Directory.Exists(folder))
             {
                 Ui.Warn(this, "This folder doesn't exist:\n\n" + folder);
                 return;
@@ -422,8 +438,9 @@ namespace PathPlusPlus.App
                 }
                 Reload(tab);
             }
+
+            _notice = "Saved. " + Ui.NewTerminalHint;
             Render();
-            _status.Text = "Saved. Open a new terminal window to use the updated PATH.";
             return true;
         }
 
@@ -431,11 +448,13 @@ namespace PathPlusPlus.App
 
         private void OnBackups(object sender, EventArgs e)
         {
+            bool restored;
             using (var form = new BackupsForm(_runner))
             {
                 form.ShowDialog(this);
-                if (!form.RestoredAny) return;
+                restored = form.RestoredAny;
             }
+            if (!restored) return;
             if (_user.Dirty || _machine.Dirty)
             {
                 Ui.Info(this, "A backup was restored. Click Reload to see it (this discards your unsaved edits).");
@@ -457,15 +476,25 @@ namespace PathPlusPlus.App
 
         private void OnKeyDown(object sender, KeyEventArgs e)
         {
-            if (e.Control && e.KeyCode == Keys.S) { Save(); e.Handled = true; }
-            else if (e.KeyCode == Keys.F5) { ReloadAll(askIfDirty: true); e.Handled = true; }
-            else if (ActiveControl is TabControl || ActiveControl is ListView)
+            if (e.Control && e.KeyCode == Keys.S)
             {
-                if (e.KeyCode == Keys.Delete) { OnRemove(sender, e); e.Handled = true; }
-                else if (e.KeyCode == Keys.Insert) { OnAdd(sender, e); e.Handled = true; }
-                else if (e.KeyCode == Keys.Enter) { OnEdit(sender, e); e.Handled = true; }
-                else if (e.Alt && e.KeyCode == Keys.Up) { MoveSelection(-1); e.Handled = true; }
-                else if (e.Alt && e.KeyCode == Keys.Down) { MoveSelection(+1); e.Handled = true; }
+                Save();
+                e.Handled = true;
+            }
+            else if (e.KeyCode == Keys.F5)
+            {
+                ReloadAll(askIfDirty: true);
+                e.Handled = true;
+            }
+            else if (ActiveControl is ListView)
+            {
+                if (e.KeyCode == Keys.Delete) OnRemove(sender, e);
+                else if (e.KeyCode == Keys.Insert) OnAdd(sender, e);
+                else if (e.KeyCode == Keys.Enter) OnEdit(sender, e);
+                else if (e.Alt && e.KeyCode == Keys.Up) MoveSelection(-1);
+                else if (e.Alt && e.KeyCode == Keys.Down) MoveSelection(+1);
+                else return;
+                e.Handled = true;
             }
         }
     }

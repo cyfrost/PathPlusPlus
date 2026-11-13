@@ -10,33 +10,6 @@ using Microsoft.Win32;
 
 namespace PathPlusPlus.Core
 {
-    /// <summary>A snapshot of a variable taken just before Path++ changed it.</summary>
-    public sealed class BackupInfo
-    {
-        public string File { get; set; }
-        public DateTime TimestampUtc { get; set; }
-        public EnvScope Scope { get; set; }
-        public string Name { get; set; }
-        public bool Existed { get; set; }
-        public RegistryValueKind Kind { get; set; }
-        public string Value { get; set; }
-    }
-
-    public interface IBackupStore
-    {
-        /// <summary>Saves the state of <paramref name="name"/> (null = did not exist). Returns the backup file path.</summary>
-        string Save(EnvScope scope, string name, RawValue before);
-
-        IList<BackupInfo> List();
-
-        BackupInfo Load(string file);
-
-        /// <summary>True when <paramref name="file"/> is inside the backup folder for <paramref name="scope"/>.</summary>
-        bool IsInStore(string file, EnvScope scope);
-
-        string GetDirectory(EnvScope scope);
-    }
-
     /// <summary>
     /// Plain-text backups. User-scope backups go to %LOCALAPPDATA%\Path++\Backups; system-scope backups go to
     /// %ProgramData%\Path++\Backups, which is locked to administrators so a restore can't be tampered with.

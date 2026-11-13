@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Reflection;
@@ -142,7 +143,7 @@ namespace PathPlusPlus.Cli
                     if (info.Status == EntryStatus.Empty) continue;
                     n++;
                     string note = info.Status == EntryStatus.Ok ? string.Empty : "   <- " + info.Describe(scope);
-                    _out.WriteLine(string.Format("  {0,3}. {1}{2}", n, info.Text, note));
+                    _out.WriteLine(string.Format(CultureInfo.CurrentCulture, "  {0,3}. {1}{2}", n, info.Text, note));
                 }
                 if (n == 0) _out.WriteLine("  (empty)");
                 _out.WriteLine();
@@ -212,7 +213,7 @@ namespace PathPlusPlus.Cli
             for (int i = 0; i < backups.Count; i++)
             {
                 BackupInfo b = backups[i];
-                _out.WriteLine(string.Format("  {0,3}. {1:yyyy-MM-dd HH:mm:ss}  {2,-6}  {3}{4}",
+                _out.WriteLine(string.Format(CultureInfo.CurrentCulture, "  {0,3}. {1:yyyy-MM-dd HH:mm:ss}  {2,-6}  {3}{4}",
                     i + 1, b.TimestampUtc.ToLocalTime(), b.Scope.DisplayName(), b.Name, b.Existed ? string.Empty : "  (did not exist)"));
                 _out.WriteLine("       " + b.File);
             }

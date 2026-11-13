@@ -1,31 +1,10 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using Microsoft.Win32;
 
 namespace PathPlusPlus.Core
 {
-    /// <summary>The outcome of a change.</summary>
-    public sealed class ChangeResult
-    {
-        public ChangeResult(bool changed, int count, string message, string backupFile = null)
-        {
-            Changed = changed;
-            Count = count;
-            Message = message;
-            BackupFile = backupFile;
-        }
-
-        /// <summary>False when nothing needed to change (e.g. folder already in PATH).</summary>
-        public bool Changed { get; }
-
-        /// <summary>Number of entries affected (e.g. instances removed).</summary>
-        public int Count { get; }
-
-        public string Message { get; }
-
-        public string BackupFile { get; }
-    }
-
     /// <summary>
     /// All environment changes go through here. Every write:
     /// (1) backs up the previous value, (2) preserves REG_EXPAND_SZ so %VARIABLES% keep working,
@@ -228,7 +207,7 @@ namespace PathPlusPlus.Core
             }
             _notifier.EnvironmentChanged();
             return new ChangeResult(true, 1,
-                "Restored " + info.Scope.DisplayName() + " variable " + info.Name + " to its state at " + info.TimestampUtc.ToLocalTime().ToString("g") + ".", backup);
+                "Restored " + info.Scope.DisplayName() + " variable " + info.Name + " to its state at " + info.TimestampUtc.ToLocalTime().ToString("g", CultureInfo.CurrentCulture) + ".", backup);
         }
 
         // ---------------------------------------------------------------- helpers

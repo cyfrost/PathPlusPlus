@@ -1,19 +1,60 @@
-# Build output
-bin/
-obj/
+# ---------------------------------------------------------------- build output
+[Bb]in/
+[Oo]bj/
+[Dd]ebug/
+[Rr]elease/
+x64/
+x86/
+[Aa][Rr][Mm]64/
 artifacts/
-TestResults/
+publish/
 *.binlog
+*.pdb
 
-# Visual Studio
-.vs/
-*.user
-*.suo
-*.userprefs
+# The released installer is kept in dist/ on purpose (see dist/README.md); anything else built there is not.
+dist/*
+!dist/README.md
+!dist/SHA256SUMS.txt
+!dist/Path++-Setup-*.exe
 
-# NuGet
+# ---------------------------------------------------------------- tests and coverage
+[Tt]est[Rr]esults/
+*.trx
+coverage*.json
+coverage*.xml
+*.coverage
+*.coveragexml
+
+# ---------------------------------------------------------------- NuGet
 packages/
 *.nupkg
+*.snupkg
+project.lock.json
+.nuget/
 
-# Local tooling
+# ---------------------------------------------------------------- IDEs and editors
+.vs/
+.vscode/*
+!.vscode/settings.json
+!.vscode/extensions.json
+.idea/
+*.user
+*.userosscache
+*.suo
+*.userprefs
+*.rsuser
+*.sln.docstates
+*.DotSettings.user
+*.swp
+*~
+
+# ---------------------------------------------------------------- operating system
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+.DS_Store
+
+# ---------------------------------------------------------------- local tooling
 .tools/
+*.log

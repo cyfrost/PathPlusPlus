@@ -2,7 +2,6 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using System.Threading;
 using System.Windows.Forms;
 using PathPlusPlus.Core;
 
@@ -45,7 +44,7 @@ namespace PathPlusPlus.App
             {
                 return Dispatch(args);
             }
-            catch (Exception ex)
+            catch (Exception ex) when (!(ex is OutOfMemoryException))
             {
                 Ui.Error(null, "Unexpected error: " + ex.Message);
                 return 1;
@@ -57,9 +56,13 @@ namespace PathPlusPlus.App
             OperationRunner runner = EnvironmentServices.CreateRunner();
             if (args.Length == 0)
             {
-                using (SingleInstance editor = SingleInstance.TryAcquire("PathPlusPlus.Editor"))
+                using (SingleInstance instance = SingleInstance.TryAcquire("PathPlusPlus.Editor", Ui.Title(Ui.EditorTitle)))
                 {
-                    Application.Run(new MainForm(runner));
+                    if (instance == null) return 0;
+                    using (var editor = new MainForm(runner))
+                    {
+                        Application.Run(editor);
+                    }
                 }
                 return 0;
             }
@@ -86,13 +89,13 @@ namespace PathPlusPlus.App
             switch (command)
             {
                 case "--add-to-path":
-                    Application.Run(new AddToPathDialog(runner, target));
+                    using (var dialog = new AddToPathDialog(runner, target)) Application.Run(dialog);
                     return 0;
                 case "--remove-from-path":
                     RemoveFromPathDialog.Run(runner, target);
                     return 0;
                 default:
-                    Application.Run(new NewVariableDialog(runner, target));
+                    using (var dialog = new NewVariableDialog(runner, target)) Application.Run(dialog);
                     return 0;
             }
         }
@@ -117,9 +120,13 @@ namespace PathPlusPlus.App
             if (string.IsNullOrEmpty(path)) return "No path was given.";
 
             if (parent || (forPath && fileExists(path)))
+            {
                 target = PathNormalizer.ParentDirectory(path);
+            }
             else
+            {
                 target = forPath ? PathNormalizer.TrimTrailingSeparators(path) : path;
+            }
             return null;
         }
 
@@ -129,71 +136,23 @@ namespace PathPlusPlus.App
             try
             {
                 if (args[0] == "--register-shell")
+                {
                     ShellIntegration.Register(allUsers, Application.ExecutablePath);
+                }
                 else
+                {
                     ShellIntegration.Unregister(allUsers);
+                }
                 return 0;
             }
-            catch (Exception ex)
+            catch (Exception ex) when (ex is UnauthorizedAccessException || ex is System.Security.SecurityException)
             {
-                Console.Error.WriteLine(ex.Message);
-                return ex is UnauthorizedAccessException || ex is System.Security.SecurityException ? (int)EnvError.NotPermitted : 1;
+                return (int)EnvError.NotPermitted;
+            }
+            catch (IOException)
+            {
+                return (int)EnvError.Failed;
             }
         }
-    }
-
-    /// <summary>Keeps a single PATH editor open: a second launch brings the first one forward.</summary>
-    internal sealed class SingleInstance : IDisposable
-    {
-        private readonly Mutex _mutex;
-
-        private SingleInstance(Mutex mutex)
-        {
-            _mutex = mutex;
-        }
-
-        public static SingleInstance TryAcquire(string name)
-        {
-            var mutex = new Mutex(true, @"Local\" + name, out bool created);
-            if (!created)
-            {
-                mutex.Dispose();
-                BringExistingToFront();
-                Environment.Exit(0);
-            }
-            return new SingleInstance(mutex);
-        }
-
-        private static void BringExistingToFront()
-        {
-            var current = System.Diagnostics.Process.GetCurrentProcess();
-            foreach (var p in System.Diagnostics.Process.GetProcessesByName(current.ProcessName))
-            {
-                if (p.Id == current.Id || p.MainWindowHandle == IntPtr.Zero) continue;
-                if (!p.MainWindowTitle.StartsWith("Path++ - PATH editor", StringComparison.Ordinal)) continue;
-                ShowWindow(p.MainWindowHandle, 9 /* SW_RESTORE */);
-                SetForegroundWindow(p.MainWindowHandle);
-                break;
-            }
-        }
-
-        public void Dispose()
-        {
-            try
-            {
-                _mutex.ReleaseMutex();
-            }
-            catch (ApplicationException)
-            {
-                // Not owned.
-            }
-            _mutex.Dispose();
-        }
-
-        [System.Runtime.InteropServices.DllImport("user32.dll")]
-        private static extern bool SetForegroundWindow(IntPtr hWnd);
-
-        [System.Runtime.InteropServices.DllImport("user32.dll")]
-        private static extern bool ShowWindow(IntPtr hWnd, int cmd);
     }
 }

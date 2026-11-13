@@ -6,7 +6,7 @@
     <AssemblyTitle>Path++</AssemblyTitle>
     <Description>View and manage PATH and environment variables from Explorer.</Description>
     <ApplicationManifest>app.manifest</ApplicationManifest>
-    <ApplicationIcon>app.ico</ApplicationIcon>
+    <ApplicationIcon>$(AppIcon)</ApplicationIcon>
   </PropertyGroup>
   <ItemGroup>
     <Reference Include="System.Windows.Forms" />

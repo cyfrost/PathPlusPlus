@@ -3,13 +3,6 @@ using System.Collections.Generic;
 
 namespace PathPlusPlus.Cli
 {
-    internal sealed class CliUsageException : Exception
-    {
-        public CliUsageException(string message) : base(message)
-        {
-        }
-    }
-
     /// <summary>Minimal, strict argument parser: "command [positionals] [--flags]".</summary>
     internal sealed class CliArgs
     {

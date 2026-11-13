@@ -4,21 +4,6 @@ using System.Security.Principal;
 
 namespace PathPlusPlus.Core
 {
-    public interface ISessionInfo
-    {
-        /// <summary>True when this process has an elevated administrator token.</summary>
-        bool IsElevated { get; }
-
-        /// <summary>
-        /// True when this process runs as a different account from the person signed in to the desktop —
-        /// e.g. a standard user approved a UAC prompt with an IT admin's credentials. In that case HKCU
-        /// belongs to the admin, so user-scope changes would land in the wrong profile.
-        /// </summary>
-        bool IsDifferentUserThanDesktop { get; }
-
-        string UserName { get; }
-    }
-
     public sealed class WindowsSessionInfo : ISessionInfo
     {
         private readonly Lazy<bool> _elevated;
@@ -59,7 +44,7 @@ namespace PathPlusPlus.Core
         {
             IntPtr shell = GetShellWindow();
             if (shell == IntPtr.Zero) return null;
-            GetWindowThreadProcessId(shell, out uint pid);
+            if (GetWindowThreadProcessId(shell, out uint pid) == 0) return null;
             if (pid == 0) return null;
 
             IntPtr process = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, false, pid);

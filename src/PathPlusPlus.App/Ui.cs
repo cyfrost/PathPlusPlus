@@ -1,20 +1,49 @@
 using System;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.Drawing;
 using System.IO;
-using System.Runtime.InteropServices;
 using System.Windows.Forms;
+using PathPlusPlus.Core;
 
 namespace PathPlusPlus.App
 {
-    /// <summary>Small helpers so every window looks and behaves the same.</summary>
+    /// <summary>
+    /// Shared look and wording for every window, so dialogs can't drift apart:
+    /// one title format, one padding, one button size, one set of note colours and one vocabulary.
+    /// </summary>
     internal static class Ui
     {
         public const string AppName = "Path++";
+        public const string EditorTitle = "PATH editor";
+
+        public const int WindowPadding = 12;
+        public const int ButtonHeight = 28;
+        public const int ButtonMinWidth = 88;
+        public const int ContentWidth = 460;
+
+        public const string NewTerminalHint = "Open a new terminal window to see the change.";
+        public const string BackupHint = "A backup is saved first, so you can undo this from Path++ › Backups.";
+        public const string AdminNote = "needs administrator approval";
+
         private static Icon _icon;
 
-        public static readonly Color ProblemColor = Color.FromArgb(176, 0, 32);
-        public static readonly Color WarningColor = Color.FromArgb(150, 85, 0);
+        public enum Tone
+        {
+            Info,
+            Warning,
+            Error,
+        }
+
+        public static Color ToneColor(Tone tone)
+        {
+            switch (tone)
+            {
+                case Tone.Error: return Color.FromArgb(176, 0, 32);
+                case Tone.Warning: return Color.FromArgb(150, 85, 0);
+                default: return SystemColors.GrayText;
+            }
+        }
 
         public static Icon AppIcon
         {
@@ -26,7 +55,7 @@ namespace PathPlusPlus.App
                     {
                         _icon = Icon.ExtractAssociatedIcon(Application.ExecutablePath);
                     }
-                    catch (Exception)
+                    catch (ArgumentException)
                     {
                         _icon = SystemIcons.Application;
                     }
@@ -35,28 +64,51 @@ namespace PathPlusPlus.App
             }
         }
 
-        /// <summary>Standard setup for a window built in code. Call between SuspendLayout/ResumeLayout.</summary>
-        public static void InitForm(Form form, string title)
+        /// <summary>"Backups" becomes "Backups - Path++".</summary>
+        public static string Title(string window) => window + " - " + AppName;
+
+        /// <summary>
+        /// The wording for a scope choice, used by every dialog:
+        /// "Just me: your user PATH" / "All users: the system PATH (needs administrator approval)".
+        /// </summary>
+        public static string ScopeChoice(EnvScope scope, string what = "PATH", string detail = null, bool adminNote = true)
+        {
+            var notes = new List<string>();
+            if (!string.IsNullOrEmpty(detail)) notes.Add(detail);
+            if (scope == EnvScope.Machine && adminNote) notes.Add(AdminNote);
+            string text = scope == EnvScope.User ? "Just me: your user " + what : "All users: the system " + what;
+            return notes.Count == 0 ? text : text + " (" + string.Join(", ", notes) + ")";
+        }
+
+        /// <summary>Standard setup for a resizable window. Call between SuspendLayout/ResumeLayout.</summary>
+        public static void InitForm(Form form, string window)
         {
             form.AutoScaleDimensions = new SizeF(96F, 96F);
             form.AutoScaleMode = AutoScaleMode.Dpi;
             form.Font = SystemFonts.MessageBoxFont;
-            form.Text = title;
+            form.Text = Title(window);
             form.Icon = AppIcon;
             form.StartPosition = FormStartPosition.CenterScreen;
             form.ShowInTaskbar = true;
+            form.Padding = new Padding(WindowPadding);
         }
 
         /// <summary>Fixed-size dialog that sizes itself to its content.</summary>
-        public static void InitDialog(Form form, string title)
+        public static void InitDialog(Form form, string window)
         {
-            InitForm(form, title);
+            InitForm(form, window);
             form.FormBorderStyle = FormBorderStyle.FixedDialog;
             form.MaximizeBox = false;
             form.MinimizeBox = false;
             form.AutoSize = true;
             form.AutoSizeMode = AutoSizeMode.GrowAndShrink;
-            form.Padding = new Padding(12);
+        }
+
+        /// <summary>A dialog owned by another window (not shown in the taskbar, centred on its owner).</summary>
+        public static void MakeChild(Form form)
+        {
+            form.ShowInTaskbar = false;
+            form.StartPosition = FormStartPosition.CenterParent;
         }
 
         public static TableLayoutPanel Column()
@@ -80,48 +132,105 @@ namespace PathPlusPlus.App
             panel.Controls.Add(control, 0, panel.RowCount - 1);
         }
 
-        public static Label Label(string text, int wrapWidth = 460, bool bold = false)
+        /// <summary>Bold first line of a dialog.</summary>
+        public static Label Heading(string text, int wrapWidth = ContentWidth)
         {
-            var label = new Label
+            Label label = Label(text, wrapWidth);
+            label.Font = new Font(SystemFonts.MessageBoxFont, FontStyle.Bold);
+            label.Margin = new Padding(3, 0, 3, 8);
+            return label;
+        }
+
+        public static Label Label(string text, int wrapWidth = ContentWidth)
+        {
+            return new Label
             {
                 Text = text,
                 AutoSize = true,
                 MaximumSize = new Size(wrapWidth, 0),
                 Margin = new Padding(3, 3, 3, 6),
             };
-            if (bold) label.Font = new Font(SystemFonts.MessageBoxFont, FontStyle.Bold);
+        }
+
+        /// <summary>A coloured note under the inputs; hidden while empty.</summary>
+        public static Label Note(int wrapWidth = ContentWidth)
+        {
+            Label label = Label(string.Empty, wrapWidth);
+            label.Visible = false;
             return label;
         }
 
-        public static TextBox ReadOnlyBox(string text, int width = 460)
+        public static void SetNote(Label note, string text, Tone tone)
+        {
+            note.Text = text ?? string.Empty;
+            note.ForeColor = ToneColor(tone);
+            note.Visible = !string.IsNullOrEmpty(text);
+        }
+
+        /// <summary>Small grey text at the bottom of a dialog (e.g. the backup reminder).</summary>
+        public static Label Hint(string text, int wrapWidth = ContentWidth)
+        {
+            Label label = Label(text, wrapWidth);
+            label.ForeColor = SystemColors.GrayText;
+            label.Margin = new Padding(3, 8, 3, 0);
+            return label;
+        }
+
+        public static TextBox ReadOnlyBox(string text, int width = ContentWidth)
         {
             return new TextBox
             {
                 Text = text,
                 ReadOnly = true,
+                TabStop = false, // focus starts on the first choice, not on selected read-only text
                 Width = width,
-                Margin = new Padding(3, 3, 3, 8),
-                TabStop = false,
+                Margin = new Padding(3, 0, 3, 8),
             };
         }
 
-        public static Button Button(string text, EventHandler onClick = null, int minWidth = 88)
+        public static TextBox InputBox(string text, int width = ContentWidth)
+        {
+            return new TextBox { Text = text ?? string.Empty, Width = width, Margin = new Padding(3, 0, 3, 8) };
+        }
+
+        public static GroupBox Group(string text, params Control[] options)
+        {
+            var group = new GroupBox
+            {
+                Text = text,
+                AutoSize = true,
+                AutoSizeMode = AutoSizeMode.GrowAndShrink,
+                Dock = DockStyle.Fill,
+                Padding = new Padding(8, 4, 8, 4),
+                Margin = new Padding(3, 4, 3, 4),
+            };
+            TableLayoutPanel column = Column();
+            foreach (Control option in options)
+            {
+                option.Margin = new Padding(3, 3, 3, 3);
+                AddRow(column, option);
+            }
+            group.Controls.Add(column);
+            return group;
+        }
+
+        public static Button Button(string text, EventHandler onClick = null, int minWidth = ButtonMinWidth)
         {
             var b = new Button
             {
                 Text = text,
                 AutoSize = true,
                 AutoSizeMode = AutoSizeMode.GrowAndShrink,
-                MinimumSize = new Size(minWidth, 26),
+                MinimumSize = new Size(minWidth, ButtonHeight),
                 FlatStyle = FlatStyle.System, // required for the UAC shield
                 UseVisualStyleBackColor = true,
-                Margin = new Padding(6, 3, 0, 3),
+                Margin = new Padding(6, 0, 0, 0),
             };
             if (onClick != null) b.Click += onClick;
             return b;
         }
 
-        /// <summary>A right-aligned OK/Cancel style button row.</summary>
+        /// <summary>Right-aligned button row (primary button first).</summary>
         public static FlowLayoutPanel ButtonRow(params Button[] buttons)
         {
             var row = new FlowLayoutPanel
@@ -130,7 +239,7 @@ namespace PathPlusPlus.App
                 AutoSize = true,
                 AutoSizeMode = AutoSizeMode.GrowAndShrink,
                 Dock = DockStyle.Fill,
-                Margin = new Padding(0, 10, 0, 0),
+                Margin = new Padding(0, 12, 0, 0),
                 WrapContents = false,
             };
             // RightToLeft: add in reverse so the first button ends up leftmost.
@@ -138,18 +247,27 @@ namespace PathPlusPlus.App
             return row;
         }
 
+        /// <summary>Wires up the standard primary/Cancel pair and returns the Cancel button.</summary>
+        public static Button CancelButton(Form form)
+        {
+            Button cancel = Button("Cancel");
+            cancel.DialogResult = DialogResult.Cancel;
+            form.CancelButton = cancel;
+            return cancel;
+        }
+
         /// <summary>Shows or hides the UAC shield on a button.</summary>
         public static void SetShield(Button button, bool show)
         {
             if (button.FlatStyle != FlatStyle.System) button.FlatStyle = FlatStyle.System;
+            void Apply() => NativeMethods.SendMessage(button.Handle, NativeMethods.BCM_SETSHIELD, IntPtr.Zero, new IntPtr(show ? 1 : 0));
             if (button.IsHandleCreated)
             {
-                NativeMethods.SendMessage(button.Handle, NativeMethods.BCM_SETSHIELD, IntPtr.Zero, new IntPtr(show ? 1 : 0));
+                Apply();
             }
             else
             {
-                button.HandleCreated += (s, e) =>
-                    NativeMethods.SendMessage(button.Handle, NativeMethods.BCM_SETSHIELD, IntPtr.Zero, new IntPtr(show ? 1 : 0));
+                button.HandleCreated += (s, e) => Apply();
             }
         }
 
@@ -165,32 +283,34 @@ namespace PathPlusPlus.App
         public static bool Confirm(IWin32Window owner, string text) =>
             MessageBox.Show(owner, text, AppName, MessageBoxButtons.YesNo, MessageBoxIcon.Question, MessageBoxDefaultButton.Button2) == DialogResult.Yes;
 
+        /// <summary>Shows the result of a change. Returns true when it succeeded (caller usually closes).</summary>
+        public static bool ShowResult(IWin32Window owner, EnvResponse response, string successSuffix = NewTerminalHint)
+        {
+            if (response.Error == EnvError.Cancelled) return false;
+            if (!response.Success)
+            {
+                Error(owner, response.Message);
+                return false;
+            }
+            Info(owner, response.Changed && !string.IsNullOrEmpty(successSuffix) ? response.Message + "\n\n" + successSuffix : response.Message);
+            return true;
+        }
+
         /// <summary>Opens the built-in Windows "Environment Variables" dialog.</summary>
         public static void OpenWindowsEnvironmentDialog()
         {
             string rundll = Path.Combine(Environment.SystemDirectory, "rundll32.exe");
-            Process.Start(new ProcessStartInfo(rundll, "sysdm.cpl,EditEnvironmentVariables") { UseShellExecute = false });
+            using (Process.Start(new ProcessStartInfo(rundll, "sysdm.cpl,EditEnvironmentVariables") { UseShellExecute = false }))
+            {
+            }
         }
 
         public static void OpenFolder(string folder)
         {
-            Process.Start(new ProcessStartInfo(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Windows), "explorer.exe"), "\"" + folder + "\"")
+            string explorer = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Windows), "explorer.exe");
+            using (Process.Start(new ProcessStartInfo(explorer, "\"" + folder + "\"") { UseShellExecute = false }))
             {
-                UseShellExecute = false,
-            });
+            }
         }
-    }
-
-    internal static class NativeMethods
-    {
-        public const int BCM_SETSHIELD = 0x160C;
-        public const int SHCNE_ASSOCCHANGED = 0x08000000;
-        public const uint SHCNF_IDLIST = 0x0000;
-
-        [DllImport("user32.dll", CharSet = CharSet.Unicode)]
-        public static extern IntPtr SendMessage(IntPtr hWnd, int msg, IntPtr wParam, IntPtr lParam);
-
-        [DllImport("shell32.dll")]
-        public static extern void SHChangeNotify(int eventId, uint flags, IntPtr item1, IntPtr item2);
     }
 }

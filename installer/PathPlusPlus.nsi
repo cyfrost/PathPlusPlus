@@ -66,8 +66,8 @@ VIAddVersionKey "LegalCopyright" "Copyright (c) 2018-2026 ${PRODUCT_PUBLISHER}"
 
 ; ---------------------------------------------------------------- pages
 
-!define MUI_ICON "..\src\PathPlusPlus.App\app.ico"
-!define MUI_UNICON "..\src\PathPlusPlus.App\app.ico"
+!define MUI_ICON "..\assets\PathPlusPlus.ico"
+!define MUI_UNICON "..\assets\PathPlusPlus.ico"
 !define MUI_ABORTWARNING
 !define MUI_COMPONENTSPAGE_SMALLDESC
 

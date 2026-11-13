@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Drawing;
+using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Windows.Forms;
@@ -11,7 +12,10 @@ namespace PathPlusPlus.App
     /// <summary>Lists automatic backups and restores them.</summary>
     internal sealed class BackupsForm : Form
     {
+        private const string IntroText = "Path++ saves the previous value before every change. Restoring also saves a backup first, so it can be undone too.";
+
         private readonly OperationRunner _runner;
+        private readonly Label _intro;
         private readonly ListView _list;
         private readonly Button _restore;
         private readonly Button _view;
@@ -21,16 +25,14 @@ namespace PathPlusPlus.App
             _runner = runner;
 
             SuspendLayout();
-            Ui.InitForm(this, "Backups - " + Ui.AppName);
-            ShowInTaskbar = false;
-            StartPosition = FormStartPosition.CenterParent;
+            Ui.InitForm(this, "Backups");
+            Ui.MakeChild(this);
             ClientSize = new Size(720, 400);
-            MinimumSize = new Size(520, 300);
+            MinimumSize = new Size(560, 300);
             MinimizeBox = false;
-            Padding = new Padding(10);
 
-            var intro = Ui.Label("Path++ saves the previous value before every change. Restoring also saves a backup first, so it can be undone too.", wrapWidth: 680);
-            intro.Dock = DockStyle.Top;
+            _intro = Ui.Label(IntroText, wrapWidth: 680);
+            _intro.Dock = DockStyle.Top;
 
             _list = new ListView
             {
@@ -43,21 +45,22 @@ namespace PathPlusPlus.App
             _list.Columns.Add("When", 150);
             _list.Columns.Add("Scope", 80);
             _list.Columns.Add("Variable", 140);
-            _list.Columns.Add("Size / note", 300);
+            _list.Columns.Add("Contents", 300);
             _list.SelectedIndexChanged += (s, e) => UpdateButtons();
-            _list.DoubleClick += (s, e) => OnView(s, e);
+            _list.DoubleClick += OnView;
 
-            _restore = Ui.Button("Restore…", OnRestore);
-            _view = Ui.Button("View…", OnView);
-            var openUser = Ui.Button("Open user folder", (s, e) => OpenDir(EnvScope.User), 120);
-            var openMachine = Ui.Button("Open system folder", (s, e) => OpenDir(EnvScope.Machine), 120);
-            var close = Ui.Button("Close");
+            _restore = Ui.Button("&Restore…", OnRestore);
+            _view = Ui.Button("&View…", OnView);
+            Button openUser = Ui.Button("Open &user folder", (s, e) => OpenDir(EnvScope.User));
+            Button openMachine = Ui.Button("Open &system folder", (s, e) => OpenDir(EnvScope.Machine));
+            Button close = Ui.Button("Close");
             close.DialogResult = DialogResult.Cancel;
-            var buttons = Ui.ButtonRow(_restore, _view, openUser, openMachine, close);
+            FlowLayoutPanel buttons = Ui.ButtonRow(_restore, _view, openUser, openMachine, close);
             buttons.Dock = DockStyle.Bottom;
+            buttons.Padding = new Padding(0, 12, 0, 0); // docked controls ignore Margin
 
             Controls.Add(_list);
-            Controls.Add(intro);
+            Controls.Add(_intro);
             Controls.Add(buttons);
             CancelButton = close;
             ResumeLayout(false);
@@ -78,16 +81,17 @@ namespace PathPlusPlus.App
             _list.Items.Clear();
             foreach (BackupInfo b in backups)
             {
-                string note = b.Existed
+                string contents = b.Existed
                     ? (EnvValidation.IsPathName(b.Name) ? new PathList(b.Value).Entries.Count() + " entries" : b.Value.Length + " characters")
-                    : "did not exist";
-                var item = new ListViewItem(b.TimestampUtc.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss")) { Tag = b };
+                    : "Did not exist";
+                var item = new ListViewItem(b.TimestampUtc.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.CurrentCulture)) { Tag = b };
                 item.SubItems.Add(b.Scope.DisplayName());
                 item.SubItems.Add(b.Name);
-                item.SubItems.Add(note);
+                item.SubItems.Add(contents);
                 _list.Items.Add(item);
             }
             _list.EndUpdate();
+            _intro.Text = backups.Count == 0 ? "No backups yet. " + IntroText : IntroText;
             if (_list.Items.Count > 0) _list.Items[0].Selected = true;
             UpdateButtons();
         }
@@ -109,7 +113,7 @@ namespace PathPlusPlus.App
                 : EnvValidation.IsPathName(b.Name)
                     ? string.Join(Environment.NewLine, new PathList(b.Value).Segments)
                     : b.Value;
-            using (var dialog = new TextViewDialog(b.Scope.DisplayName() + " " + b.Name + " at " + b.TimestampUtc.ToLocalTime().ToString("g"), text))
+            using (var dialog = new TextViewDialog(b.Scope.DisplayName() + " " + b.Name + " at " + b.TimestampUtc.ToLocalTime().ToString("g", CultureInfo.CurrentCulture), text))
             {
                 dialog.ShowDialog(this);
             }
@@ -120,20 +124,14 @@ namespace PathPlusPlus.App
             BackupInfo b = Selected;
             if (b == null) return;
             if (!Ui.Confirm(this, "Restore the " + b.Scope.DisplayName() + " variable " + b.Name + " to how it was at " +
-                                  b.TimestampUtc.ToLocalTime().ToString("g") + "?\n\nIts current value is backed up first."))
+                                  b.TimestampUtc.ToLocalTime().ToString("g", CultureInfo.CurrentCulture) + "?\n\nIts current value is backed up first."))
             {
                 return;
             }
 
             EnvResponse r = _runner.Run(EnvRequest.Restore(b.Scope, b.File));
-            if (r.Error == EnvError.Cancelled) return;
-            if (!r.Success)
-            {
-                Ui.Error(this, r.Message);
-                return;
-            }
+            if (!Ui.ShowResult(this, r, EnvValidation.IsPathName(b.Name) ? Ui.NewTerminalHint : null)) return;
             RestoredAny |= r.Changed;
-            Ui.Info(this, r.Message);
             Reload();
         }
 

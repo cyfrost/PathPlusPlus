@@ -2,15 +2,24 @@
 .SYNOPSIS
   Builds Path++, runs the tests, and produces the installer and a portable zip in .\artifacts.
 
+.PARAMETER VerifyFormat
+  Fail if 'dotnet format' would change any file (CI uses this).
+
+.PARAMETER UpdateDist
+  Copy the installer into .\dist (the copy kept in the repository) and refresh dist\SHA256SUMS.txt.
+
 .EXAMPLE
   .\build.ps1
   .\build.ps1 -SkipTests
+  .\build.ps1 -UpdateDist
   .\build.ps1 -MakeNsis "D:\Tools\NSIS\makensis.exe"
 #>
 [CmdletBinding()]
 param(
     [string] $Configuration = 'Release',
     [switch] $SkipTests,
+    [switch] $VerifyFormat,
+    [switch] $UpdateDist,
     [string] $MakeNsis
 )
 
@@ -31,9 +40,14 @@ $version = ($props.Project.PropertyGroup | Where-Object { $_.Version } | Select-
 Write-Host "Path++ $version ($Configuration)" -ForegroundColor Cyan
 
 # 1. Build + test
-Invoke-Checked dotnet @('build', (Join-Path $root 'PathPlusPlus.sln'), '-c', $Configuration, '--nologo')
+$solution = Join-Path $root 'PathPlusPlus.sln'
+Invoke-Checked dotnet @('build', $solution, '-c', $Configuration, '--nologo')
+if ($VerifyFormat) {
+    Invoke-Checked dotnet @('format', $solution, '--verify-no-changes', '--no-restore')
+}
 if (-not $SkipTests) {
-    Invoke-Checked dotnet @('test', (Join-Path $root 'PathPlusPlus.sln'), '-c', $Configuration, '--no-build', '--nologo')
+    $results = Join-Path $root 'artifacts\test-results'
+    Invoke-Checked dotnet @('test', $solution, '-c', $Configuration, '--no-build', '--nologo', '--logger', 'trx', '--results-directory', $results)
 }
 
 # 2. Stage the files that ship
@@ -72,6 +86,18 @@ Compress-Archive -Path (Join-Path $stage '*') -DestinationPath $zip
 $sums = Get-ChildItem -Path $artifacts -File | Where-Object { $_.Extension -in '.exe', '.zip' } |
     ForEach-Object { '{0}  {1}' -f (Get-FileHash $_.FullName -Algorithm SHA256).Hash.ToLowerInvariant(), $_.Name }
 $sums | Set-Content (Join-Path $artifacts 'SHA256SUMS.txt') -Encoding ascii
+
+# 6. Optionally refresh the installer kept in the repository
+if ($UpdateDist) {
+    $dist = Join-Path $root 'dist'
+    New-Item -ItemType Directory -Force $dist | Out-Null
+    Get-ChildItem $dist -Filter 'Path++-Setup-*.exe' | Remove-Item -Force
+    Copy-Item $setup $dist
+    $distSetup = Join-Path $dist (Split-Path $setup -Leaf)
+    '{0}  {1}' -f (Get-FileHash $distSetup -Algorithm SHA256).Hash.ToLowerInvariant(), (Split-Path $setup -Leaf) |
+        Set-Content (Join-Path $dist 'SHA256SUMS.txt') -Encoding ascii
+    Write-Host "Updated dist\$(Split-Path $setup -Leaf)" -ForegroundColor Green
+}
 
 Write-Host ''
 Write-Host 'Artifacts:' -ForegroundColor Green

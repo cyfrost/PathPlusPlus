@@ -3,11 +3,6 @@ using System.Runtime.InteropServices;
 
 namespace PathPlusPlus.Core
 {
-    public interface IChangeNotifier
-    {
-        void EnvironmentChanged();
-    }
-
     /// <summary>
     /// Broadcasts WM_SETTINGCHANGE("Environment") so Explorer and other programs reload the environment.
     /// Without this, new terminals opened from Explorer keep the old PATH until the user signs out.

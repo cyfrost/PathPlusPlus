@@ -9,7 +9,7 @@ Works on **Windows 10 and 11**. Needs .NET Framework 4.8, which is built into Wi
 
 ## Download
 
-Get `Path++-Setup-<version>.exe` (or the portable zip) from the [latest release](https://github.com/cyfrost/PathPlusPlus/releases/latest).
+Download the installer from the [`dist/`](dist/) folder, or get the installer or portable zip from the [latest release](https://github.com/cyfrost/PathPlusPlus/releases/latest).
 
 - **Just for me** (default): no administrator rights needed. Installs to `%LOCALAPPDATA%\Programs\Path++`.
 - **All users** (administrators only): installs to `C:\Program Files\Path++`.
@@ -65,20 +65,25 @@ pathpp restore <number | file>
 
 ## Building
 
-Requirements: Visual Studio 2022+ or the .NET SDK, with the .NET Framework 4.8 targeting pack, plus [NSIS 3](https://nsis.sourceforge.io/) for the installer.
+Requirements: Visual Studio 2022+ or the .NET SDK, plus [NSIS 3](https://nsis.sourceforge.io/) for the installer. The .NET Framework 4.8 reference assemblies are restored from NuGet.
 
 ```powershell
-.\build.ps1            # build, run tests, create artifacts\Path++-Setup-<version>.exe and a portable zip
-.\build.ps1 -SkipTests
+.\build.ps1                 # build, run tests, create artifacts\Path++-Setup-<version>.exe and a portable zip
+.\build.ps1 -VerifyFormat   # also fail if 'dotnet format' would change anything (what CI runs)
+.\build.ps1 -UpdateDist     # also refresh the installer kept in dist\
 ```
 
-| Project | Output | Purpose |
+| Path | Output | Purpose |
 |---|---|---|
 | `src/PathPlusPlus.Core` | `PathPlusPlus.Core.dll` | Registry access, PATH parsing and matching, backups, elevation |
 | `src/PathPlusPlus.App` | `PathPlusPlus.exe` | PATH editor, Explorer dialogs, elevated helper, menu registration |
 | `src/PathPlusPlus.Cli` | `pathpp.exe` | Command-line tool |
 | `tests/PathPlusPlus.Tests` | | xUnit tests (`dotnet test`) |
-| `installer/` | | NSIS script |
+| `installer/` | | NSIS installer script |
+| `assets/` | | Icon shared by the executables and the installer |
+| `dist/` | `Path++-Setup-<version>.exe` | The current installer, kept in the repository |
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for coding standards and [CHANGELOG.md](CHANGELOG.md) for release notes.
 
 ## License
 
