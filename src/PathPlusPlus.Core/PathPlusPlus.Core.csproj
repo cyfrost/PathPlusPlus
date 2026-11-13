@@ -1,0 +1,11 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Library</OutputType>
+    <RootNamespace>PathPlusPlus.Core</RootNamespace>
+    <AssemblyName>PathPlusPlus.Core</AssemblyName>
+    <Description>Safe reading and writing of Windows environment variables and PATH.</Description>
+  </PropertyGroup>
+  <ItemGroup>
+    <InternalsVisibleTo Include="PathPlusPlus.Tests" />
+  </ItemGroup>
+</Project>
